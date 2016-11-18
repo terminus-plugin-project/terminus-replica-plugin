@@ -3,6 +3,12 @@
 Replica is a Terminus plugin that takes over the core `site connection-info`
 command, appending database replica connection info when available.
 
+## Installation
+
+Place the contents of this repository into `~/terminus/plugins/replica` or the
+location of your `$TERMINUS_PLUGINS_DIR`. You may do so either by cloning this
+repository using git, or by un-compressing the tarball from a release on GitHub.
+
 ## Usage
 
 If you pull connection info for an environment that has an associated slave
