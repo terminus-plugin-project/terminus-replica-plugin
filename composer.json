@@ -1,0 +1,14 @@
+{
+  "name": "terminus-plugin-project/terminus-replica-plugin",
+  "description": "Terminus Replica - A Terminus plugin that exposes replica database connection details for your Pantheon environments.",
+  "license": "MIT",
+  "type": "terminus-plugin",
+  "autoload": {
+    "psr-4": { "Pantheon\\Replica\\": "src" }
+  },
+  "extra": {
+    "terminus": {
+      "compatible-version": "^1"
+    }
+  }
+}
