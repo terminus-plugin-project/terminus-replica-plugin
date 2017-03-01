@@ -5,7 +5,7 @@ command with additional connection info related to any database replicas you
 may have enabled for your site environments.
 
 ## Installation
-For installation help, see []Manage Plugins](https://pantheon.io/docs/terminus/plugins/).
+For installation help, see [Manage Plugins](https://pantheon.io/docs/terminus/plugins/).
 
 ```sh
 mkdir -p ~/.terminus/plugins
