@@ -1,70 +1,86 @@
 <?php
 
-namespace Terminus\Commands;
+namespace Pantheon\Replica\Commands;
 
-use Terminus\Models\Binding;
+use Consolidation\AnnotatedCommand\AnnotationData;
+use Consolidation\AnnotatedCommand\CommandData;
+use Consolidation\AnnotatedCommand\Hooks\AlterResultInterface;
+use Consolidation\AnnotatedCommand\Hooks\OptionHookInterface;
+use Consolidation\OutputFormatters\StructuredData\PropertyList;
+use Pantheon\Terminus\Site\SiteAwareInterface;
+use Pantheon\Terminus\Site\SiteAwareTrait;
+use Pantheon\Terminus\Models\Binding;
+use Symfony\Component\Console\Command\Command;
+
 
 /**
- * Class SlightlyDecoratedCommand
- * @command site
+ * Class ReplicaCommand
+ * @package Pantheon\Replica\Commands
  */
-class SlightlyDecoratedCommand extends SiteCommand {
+class ReplicaCommand implements AlterResultInterface, OptionHookInterface, SiteAwareInterface {
+
+  use SiteAwareTrait;
 
   /**
-   * Retrieve connection info for a specific environment
-   * e.g. git, sftp, mysql, redis, and mysql replica.
+   * Ensures replica connection info is printed by the connection:info command.
    *
-   * ## OPTIONS
+   * @param Command $command
+   * @param AnnotationData $annotationData
    *
-   * [--site=<site>]
-   * : Name of the site from which to fetch connection info
-   *
-   * [--env=<env>]
-   * : Name of the specific environment from which to fetch connection info
-   *
-   * [--field=<field>]
-   * : Name of a specfic field in the connection info to return
-   *   Choices are git_command, git_host, git_port, git_url, git_username,
-   *   mysql_command, mysql_database, mysql_host, mysql_password, mysql_port,
-   *   mysql_url, mysql_username, mysql_replica_command, mysql_replica_database,
-   *   mysql_replica_host, mysql_replica_password, mysql_replica_port,
-   *   mysql_replica_url, mysql_replica_username, redis_command, redis_password,
-   *   redis_port, redis_url, sftp_command, sftp_host, sftp_password, sftp_url,
-   *   and sftp_username
-   *
-   * @subcommand connection-info
+   * @hook option connection:info
    */
-  public function connectionInfo($args, $assoc_args) {
-    $site = $this->sites->get(
-      $this->input()->siteName(array('args' => $assoc_args))
-    );
-    $env_id = $this->input()->env(array('args' => $assoc_args, 'site' => $site));
-    $environment = $site->environments->get($env_id);
-    $info = $environment->connectionInfo();
+  public function getOptions(Command $command, AnnotationData $annotationData) {
+    $annotations = $annotationData->getArrayCopy();
+    $annotations['field-labels'] .= "\n" . implode("\n", array(
+      'mysql_replica_command: MySQL Replica Command',
+      'mysql_replica_username: MySQL Replica Username',
+      'mysql_replica_host: MySQL Replica Host',
+      'mysql_replica_password: MySQL Replica Password',
+      'mysql_replica_url: MySQL Replica URL',
+      'mysql_replica_port: MySQL Replica Port',
+      'mysql_replica_database: MySQL Replica Database',
+    ));
+    $annotationData->exchangeArray($annotations);
+  }
 
-    $dbservers = array_filter($environment->bindings->all(), function(Binding $binding) use ($environment) {
-      return $binding->get('environment') == $environment->id
-        && $binding->get('type') === 'dbserver'
-        && $binding->get('slave_of');
-    });
+  /**
+   * Appends MySQL replica data to connection info where applicable.
+   *
+   * @param PropertyList $result
+   * @param CommandData $commandData
+   *
+   * @hook alter connection:info
+   */
+  public function process($result, CommandData $commandData) {
+    $results = $result->getArrayCopy();
+    $siteEnv = $commandData->arguments()['site_env'];
+    list(, $env) = $this->getSiteEnv($siteEnv);
+
+    $dbservers = array();
+    foreach ($env->getBindings()->all() as $binding) {
+      if ($binding->get('environment') === $env->id
+          && $binding->get('type') === 'dbserver'
+          && $binding->get('slave_of')) {
+        $dbservers[] = $binding;
+      }
+    }
 
     if (!empty($dbservers)) {
       $replica_info = $this->interpretBinding(array_shift($dbservers));
       foreach ($replica_info as $field => $value) {
-        $info['mysql_replica_' . $field] = $value;
+        $results['mysql_replica_' . $field] = $value;
       }
     }
 
-    if (isset($assoc_args['field'])) {
-      $field = $assoc_args['field'];
-      $this->output()->outputValue($info[$field]);
-    } else {
-      $this->output()->outputRecord($info);
-    }
+    $result->exchangeArray($results);
+    return $result;
   }
 
   /**
+   * Returns an array of connection details, given a dbserver binding.
+   *
    * @param Binding $dbServer
+   * @return array
    */
   protected function interpretBinding(Binding $dbServer) {
     $username = 'pantheon';
